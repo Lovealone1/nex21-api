@@ -1,0 +1,55 @@
+# ====== Binaries ======
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ====== Go build output ======
+/bin/
+/dist/
+/build/
+
+# ====== Go coverage ======
+coverage.out
+coverage.html
+
+# ====== Vendor (solo si NO lo usas) ======
+vendor/
+
+# ====== Environment files ======
+.env
+.env.local
+.env.development
+.env.production
+
+# ====== Logs ======
+*.log
+
+# ====== IDE / Editor ======
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ====== OS ======
+.DS_Store
+Thumbs.db
+
+# ====== Air (hot reload) ======
+.air.toml
+
+# ====== Swagger docs generated ======
+docs/
+
+# ====== Generated files (si usas sqlc o swagger) ======
+*.gen.go
+
+# ====== Test binaries ======
+*.coverprofile
+
+tmp/*
+*.test
+**/coverage.txt
