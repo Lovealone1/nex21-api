@@ -1,0 +1,74 @@
+package main
+
+import (
+	"context"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Lovealone1/nex21-api/internal/config"
+	"github.com/Lovealone1/nex21-api/internal/infra/observability"
+)
+
+func main() {
+	// Load config
+	cfg := config.Load()
+
+	// Init logger (true = development, false = production)
+	observability.Init(true)
+	log := observability.Log
+
+	log.Info("Starting Nex21 API...")
+
+	// Router
+	r := chi.NewRouter()
+
+	// Core middlewares
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	// Health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Nex21 API running"))
+	})
+
+	// HTTP Server
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server in goroutine
+	go func() {
+		log.Infof("🚀 Server running on :%s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	log.Info("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Errorf("Shutdown error: %v", err)
+	}
+
+	log.Info("Server stopped gracefully")
+}
