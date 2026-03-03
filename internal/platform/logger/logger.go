@@ -1,4 +1,4 @@
-package observability
+package logger
 
 import (
 	"go.uber.org/zap"

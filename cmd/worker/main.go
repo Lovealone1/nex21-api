@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/Lovealone1/nex21-api/internal/config"
+	"github.com/Lovealone1/nex21-api/internal/platform/config"
 )
 
 func main() {

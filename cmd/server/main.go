@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/Lovealone1/nex21-api/internal/config"
-	"github.com/Lovealone1/nex21-api/internal/infra/observability"
+	"github.com/Lovealone1/nex21-api/internal/platform/config"
+	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
 )
 
 func main() {
