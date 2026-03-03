@@ -41,16 +41,16 @@ func main() {
 
 	// HTTP Server
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         ":" + cfg.HTTP.Port,
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.HTTP.ReadTimeout,
+		WriteTimeout: cfg.HTTP.WriteTimeout,
+		IdleTimeout:  cfg.HTTP.IdleTimeout,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Infof("🚀 Server running on :%s", cfg.Port)
+		log.Infof("🚀 Server running on :%s", cfg.HTTP.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
