@@ -14,6 +14,8 @@ import (
 
 	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
+	"github.com/Lovealone1/nex21-api/internal/platform/db"
+	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
 	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
 
 	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
@@ -36,6 +38,15 @@ func main() {
 	log := observability.Log
 
 	log.Info("Starting Nex21 API...")
+
+	// Initialize Database via GORM
+	database, err := db.Connect(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	// Extract the underlying *sql.DB if we want to defer close, but GORM handles pooling.
+	// sqlDB, _ := database.DB.DB()
+	// defer sqlDB.Close()
 
 	// Router
 	r := chi.NewRouter()
