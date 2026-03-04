@@ -12,6 +12,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
+	"github.com/Lovealone1/nex21-api/internal/platform/db"
+	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
 	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
 )
 
@@ -25,6 +27,15 @@ func main() {
 
 	log.Info("Starting Nex21 API...")
 
+	// Initialize Database via GORM
+	database, err := db.Connect(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	// Extract the underlying *sql.DB if we want to defer close, but GORM handles pooling.
+	// sqlDB, _ := database.DB.DB()
+	// defer sqlDB.Close()
+
 	// Router
 	r := chi.NewRouter()
 
@@ -37,6 +48,25 @@ func main() {
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Nex21 API running"))
+	})
+
+	// Private routes (Require Tenant and Auth)
+	r.Route("/api/v1", func(r chi.Router) {
+		// En el futuro aquí irá el AuthMiddleware
+		// r.Use(appMiddleware.AuthMiddleware)
+
+		// 1. Inyectamos el TenantMiddleware para validar membresía
+		r.Use(appMiddleware.TenantMiddleware(database))
+
+		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
+
+			// Si llegó hasta aquí, el middleware ya validó que el User tiene acceso al Tenant
+			// y adjuntó el TenantID seguro al Request Context.
+			tenantID := db.ExtractTenant(r.Context())
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + tenantID + `"}`))
+		})
 	})
 
 	// HTTP Server

@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	Port string
+	Port  string
+	DBUrl string
 }
 
 func Load() *Config {
@@ -19,9 +20,12 @@ func Load() *Config {
 		port = "8080"
 	}
 
+	dbUrl := os.Getenv("DATABASE_URL")
+
 	log.Println("Config loaded")
 
 	return &Config{
-		Port: port,
+		Port:  port,
+		DBUrl: dbUrl,
 	}
 }
