@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
-	"github.com/Lovealone1/nex21-api/internal/platform/errors"
+	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
+	// "github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
 // SupabaseClient implements the AuthProvider interface using GoTrue endpoints.

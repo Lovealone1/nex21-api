@@ -16,6 +16,6 @@ func main() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		log.Println("Running background jobs for...", cfg.App.Name, "in", cfg.App.Env)
+		log.Println("Running background jobs...", cfg.Port)
 	}
 }

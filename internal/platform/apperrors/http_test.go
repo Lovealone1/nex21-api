@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Lovealone1/nex21-api/internal/platform/errors"
+	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
 )
 
 func TestHTTPStatusCode(t *testing.T) {

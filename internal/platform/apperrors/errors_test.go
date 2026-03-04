@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Lovealone1/nex21-api/internal/platform/errors"
+	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
 )
 
 func TestError_Error(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
-// @title NEX21 .
+// @title NEX21 API
 // @version 1.0
 // @description Your entire business, in one platform
 // @securityDefinitions.apikey BearerAuth
@@ -58,34 +58,43 @@ func main() {
 		w.Write([]byte("Nex21 API running"))
 	})
 
-	// Setup Modules
-	supabaseClient := infra.NewSupabaseClient(cfg.Auth.SupabaseURL, cfg.Auth.SupabaseAnonKey)
-	authService := application.NewAuthService(supabaseClient)
-	authHandler := authhttp.NewAuthHandler(authService)
-
 	// Swagger Docs
 	r.Get("/api/docs/*", httpSwagger.Handler(
 		httpSwagger.URL("/api/docs/doc.json"), // The url pointing to API definition
 	))
 
-	// Mount Routes
-	r.Route("/auth", func(r chi.Router) {
-		authHandler.RegisterRoutes(r)
+	// Private routes (Require Tenant and Auth)
+	r.Route("/api/v1", func(r chi.Router) {
+		// En el futuro aquí irá el AuthMiddleware
+		// r.Use(appMiddleware.AuthMiddleware)
+
+		// 1. Inyectamos el TenantMiddleware para validar membresía
+		r.Use(appMiddleware.TenantMiddleware(database))
+
+		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
+
+			// Si llegó hasta aquí, el middleware ya validó que el User tiene acceso al Tenant
+			// y adjuntó el TenantID seguro al Request Context.
+			tenantID := db.ExtractTenant(r.Context())
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + tenantID + `"}`))
+		})
 	})
 
 	// HTTP Server
 	srv := &http.Server{
-		Addr:         ":" + cfg.HTTP.Port,
+		Addr:         ":" + cfg.Port,
 		Handler:      r,
-		ReadTimeout:  cfg.HTTP.ReadTimeout,
-		WriteTimeout: cfg.HTTP.WriteTimeout,
-		IdleTimeout:  cfg.HTTP.IdleTimeout,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Infof("Server running on: http://localhost:%s/health", cfg.HTTP.Port)
-		log.Infof("Swagger Docs available at: http://localhost:%s/api/docs/index.html", cfg.HTTP.Port)
+		log.Infof("Server running on :%s", cfg.Port)
+		log.Infof("Swagger Docs available at: http://localhost:%s/api/docs/index.html", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/Lovealone1/nex21-api/internal/platform/errors"
+	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
 )
 
 // AuthProvider defines the infra port for authenticating users.
