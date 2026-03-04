@@ -108,8 +108,8 @@ func main() {
 			log.Fatalf("Failed to commit migration %s: %v\n", file, err)
 		}
 
-		fmt.Printf("✅ Migration %s applied successfully.\n", file)
+		fmt.Printf("Migration %s applied successfully.\n", file)
 	}
 
-	fmt.Println("🎉 Database is up to date!")
+	fmt.Println("Database is up to date!")
 }

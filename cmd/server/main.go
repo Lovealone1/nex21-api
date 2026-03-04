@@ -10,11 +10,23 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
+
+	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
+	"github.com/Lovealone1/nex21-api/internal/modules/auth/infra"
+	authhttp "github.com/Lovealone1/nex21-api/internal/modules/auth/transport/http"
 )
 
+// @title NEX21 .
+// @version 1.0
+// @description Your entire business, in one platform
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	// Load config
 	cfg := config.Load()
@@ -39,6 +51,21 @@ func main() {
 		w.Write([]byte("Nex21 API running"))
 	})
 
+	// Setup Modules
+	supabaseClient := infra.NewSupabaseClient(cfg.Auth.SupabaseURL, cfg.Auth.SupabaseAnonKey)
+	authService := application.NewAuthService(supabaseClient)
+	authHandler := authhttp.NewAuthHandler(authService)
+
+	// Swagger Docs
+	r.Get("/api/docs/*", httpSwagger.Handler(
+		httpSwagger.URL("/api/docs/doc.json"), // The url pointing to API definition
+	))
+
+	// Mount Routes
+	r.Route("/auth", func(r chi.Router) {
+		authHandler.RegisterRoutes(r)
+	})
+
 	// HTTP Server
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTP.Port,
@@ -50,7 +77,8 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Infof("🚀 Server running on :%s", cfg.HTTP.Port)
+		log.Infof("Server running on: http://localhost:%s/health", cfg.HTTP.Port)
+		log.Infof("Swagger Docs available at: http://localhost:%s/api/docs/index.html", cfg.HTTP.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
