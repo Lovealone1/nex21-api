@@ -10,13 +10,21 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
 	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
+// @title NEX21 .
+// @version 1.0
+// @description Your entire business, in one platform
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	// Load config
 	cfg := config.Load()
@@ -50,37 +58,34 @@ func main() {
 		w.Write([]byte("Nex21 API running"))
 	})
 
-	// Private routes (Require Tenant and Auth)
-	r.Route("/api/v1", func(r chi.Router) {
-		// En el futuro aquí irá el AuthMiddleware
-		// r.Use(appMiddleware.AuthMiddleware)
+	// Setup Modules
+	supabaseClient := infra.NewSupabaseClient(cfg.Auth.SupabaseURL, cfg.Auth.SupabaseAnonKey)
+	authService := application.NewAuthService(supabaseClient)
+	authHandler := authhttp.NewAuthHandler(authService)
 
-		// 1. Inyectamos el TenantMiddleware para validar membresía
-		r.Use(appMiddleware.TenantMiddleware(database))
+	// Swagger Docs
+	r.Get("/api/docs/*", httpSwagger.Handler(
+		httpSwagger.URL("/api/docs/doc.json"), // The url pointing to API definition
+	))
 
-		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
-
-			// Si llegó hasta aquí, el middleware ya validó que el User tiene acceso al Tenant
-			// y adjuntó el TenantID seguro al Request Context.
-			tenantID := db.ExtractTenant(r.Context())
-
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + tenantID + `"}`))
-		})
+	// Mount Routes
+	r.Route("/auth", func(r chi.Router) {
+		authHandler.RegisterRoutes(r)
 	})
 
 	// HTTP Server
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         ":" + cfg.HTTP.Port,
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.HTTP.ReadTimeout,
+		WriteTimeout: cfg.HTTP.WriteTimeout,
+		IdleTimeout:  cfg.HTTP.IdleTimeout,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Infof("🚀 Server running on :%s", cfg.Port)
+		log.Infof("Server running on: http://localhost:%s/health", cfg.HTTP.Port)
+		log.Infof("Swagger Docs available at: http://localhost:%s/api/docs/index.html", cfg.HTTP.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
