@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
-	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
+	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
 // Membership represents the mapping between a user and a tenant

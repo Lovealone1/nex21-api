@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
-	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
+	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
 // Database wraps the gorm.DB instance

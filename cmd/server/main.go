@@ -16,11 +16,7 @@ import (
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
-	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
-
-	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
-	"github.com/Lovealone1/nex21-api/internal/modules/auth/infra"
-	authhttp "github.com/Lovealone1/nex21-api/internal/modules/auth/transport/http"
+	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
 // @title NEX21 .
