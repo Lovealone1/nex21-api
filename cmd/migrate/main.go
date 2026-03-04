@@ -35,7 +35,7 @@ func main() {
 
 	// 4. Create a tracking table to avoid re-running migrations
 	// Drop the existing table to fix data type inconsistencies from golang-migrate (which uses BIGINT)
-	_, _ = conn.Exec(ctx, `DROP TABLE IF EXISTS schema_migrations`)
+	// (Removed DROP TABLE to prevent wiping migration history on every run)
 	_, err = conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
@@ -75,7 +75,7 @@ func main() {
 		}
 
 		if exists {
-			fmt.Printf("⏭️  Skipping %s (already applied)\n", file)
+			fmt.Printf("Skipping %s (already applied)\n", file)
 			continue
 		}
 
