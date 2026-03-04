@@ -14,7 +14,7 @@ import (
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
-	observability "github.com/Lovealone1/nex21-api/internal/platform/logger"
+	"github.com/Lovealone1/nex21-api/internal/platform/observability"
 )
 
 func main() {
