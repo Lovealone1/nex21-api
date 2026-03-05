@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -25,7 +26,24 @@ func main() {
 		log.Fatal("DIRECT_URL is not set in environment")
 	}
 
-	// 3. Connect to Supabase
+	// 3. Parse subcommand: up (default) | down [N]
+	command := "up"
+	downSteps := 1
+	if len(os.Args) > 1 {
+		command = os.Args[1]
+		if command == "down" && len(os.Args) > 2 {
+			n, err := strconv.Atoi(os.Args[2])
+			if err != nil || n < 1 {
+				log.Fatalf("Invalid number of steps for down: %q (must be a positive integer)", os.Args[2])
+			}
+			downSteps = n
+		}
+	}
+	if command != "up" && command != "down" {
+		log.Fatalf("Unknown command %q. Usage: go run ./cmd/migrate [up|down [N]]", command)
+	}
+
+	// 4. Connect to Supabase
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dbURL)
 	if err != nil {
@@ -33,9 +51,7 @@ func main() {
 	}
 	defer conn.Close(ctx)
 
-	// 4. Create a tracking table to avoid re-running migrations
-	// Drop the existing table to fix data type inconsistencies from golang-migrate (which uses BIGINT)
-	// (Removed DROP TABLE to prevent wiping migration history on every run)
+	// 5. Create tracking table if it doesn't exist
 	_, err = conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
@@ -46,70 +62,132 @@ func main() {
 		log.Fatalf("Failed to create schema_migrations table: %v\n", err)
 	}
 
-	// 5. Read all files in the migrations directory
+	// 6. Read all files in the migrations directory
 	entries, err := os.ReadDir("migrations")
 	if err != nil {
 		log.Fatalf("Failed to read migrations directory: %v\n", err)
 	}
 
-	// Filter and sort .up.sql files
-	var migrationFiles []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
-			migrationFiles = append(migrationFiles, entry.Name())
+	if command == "up" {
+		runUp(ctx, conn, entries)
+	} else {
+		runDown(ctx, conn, downSteps)
+	}
+}
+
+// runUp applies all pending .up.sql migrations in ascending order.
+func runUp(ctx context.Context, conn *pgx.Conn, entries []os.DirEntry) {
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".up.sql") {
+			files = append(files, e.Name())
 		}
 	}
-	sort.Strings(migrationFiles) // Emulate standard numbering like 000001, 000002...
+	sort.Strings(files)
 
-	if len(migrationFiles) == 0 {
-		fmt.Println("No migrations found in the 'migrations' directory.")
+	if len(files) == 0 {
+		fmt.Println("No .up.sql migrations found.")
 		return
 	}
 
-	// 6. Execute unapplied migrations
-	for _, file := range migrationFiles {
+	applied := 0
+	for _, file := range files {
 		var exists bool
-		err = conn.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", file).Scan(&exists)
-		if err != nil {
+		if err := conn.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", file).Scan(&exists); err != nil {
 			log.Fatalf("Failed to check migration status for %s: %v\n", file, err)
 		}
-
 		if exists {
 			fmt.Printf("Skipping %s (already applied)\n", file)
 			continue
 		}
 
-		log.Printf("Executing migration: %s...\n", file)
-		data, err := os.ReadFile(filepath.Join("migrations", file))
-		if err != nil {
-			log.Fatalf("Failed to read migration file %s: %v\n", file, err)
-		}
-
-		// Run in a transaction to ensure atomic execution per file
-		tx, err := conn.Begin(ctx)
-		if err != nil {
-			log.Fatalf("Failed to begin transaction: %v\n", err)
-		}
-
-		_, err = tx.Exec(ctx, string(data))
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Fatalf("Migration failed %s: %v\n", file, err)
-		}
-
-		// Record the applied migration
-		_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", file)
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Fatalf("Failed to record migration %s: %v\n", file, err)
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			log.Fatalf("Failed to commit migration %s: %v\n", file, err)
-		}
-
-		fmt.Printf("Migration %s applied successfully.\n", file)
+		execMigration(ctx, conn, file, file)
+		applied++
 	}
 
-	fmt.Println("Database is up to date!")
+	if applied == 0 {
+		fmt.Println("Database is already up to date!")
+	} else {
+		fmt.Printf("Done! %d migration(s) applied.\n", applied)
+	}
+}
+
+// runDown rolls back the last N applied migrations in reverse order using .down.sql files.
+func runDown(ctx context.Context, conn *pgx.Conn, steps int) {
+	rows, err := conn.Query(ctx, `
+		SELECT version FROM schema_migrations
+		ORDER BY applied_at DESC, version DESC
+		LIMIT $1
+	`, steps)
+	if err != nil {
+		log.Fatalf("Failed to query applied migrations: %v\n", err)
+	}
+	defer rows.Close()
+
+	var toRollback []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			log.Fatalf("Failed to scan migration version: %v\n", err)
+		}
+		toRollback = append(toRollback, v)
+	}
+
+	if len(toRollback) == 0 {
+		fmt.Println("Nothing to roll back.")
+		return
+	}
+
+	for _, upFile := range toRollback {
+		// Derive the .down.sql filename from the .up.sql version key
+		downFile := strings.TrimSuffix(upFile, ".up.sql") + ".down.sql"
+
+		if _, err := os.Stat(filepath.Join("migrations", downFile)); os.IsNotExist(err) {
+			log.Fatalf("Down file not found for %s: expected %s\n", upFile, downFile)
+		}
+
+		// Run the down script (no tracking insert — we DELETE instead)
+		execMigration(ctx, conn, downFile, "")
+
+		if _, err := conn.Exec(ctx, "DELETE FROM schema_migrations WHERE version = $1", upFile); err != nil {
+			log.Fatalf("Failed to remove migration record for %s: %v\n", upFile, err)
+		}
+		fmt.Printf("Rolled back: %s\n", upFile)
+	}
+
+	fmt.Printf("Done! %d migration(s) rolled back.\n", len(toRollback))
+}
+
+// execMigration reads a SQL file and executes it inside a transaction.
+// If trackAs is non-empty, it records the version in schema_migrations.
+func execMigration(ctx context.Context, conn *pgx.Conn, filename string, trackAs string) {
+	log.Printf("Executing %s...\n", filename)
+
+	data, err := os.ReadFile(filepath.Join("migrations", filename))
+	if err != nil {
+		log.Fatalf("Failed to read %s: %v\n", filename, err)
+	}
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		log.Fatalf("Failed to begin transaction: %v\n", err)
+	}
+
+	if _, err = tx.Exec(ctx, string(data)); err != nil {
+		tx.Rollback(ctx)
+		log.Fatalf("Migration failed (%s): %v\n", filename, err)
+	}
+
+	if trackAs != "" {
+		if _, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", trackAs); err != nil {
+			tx.Rollback(ctx)
+			log.Fatalf("Failed to record migration %s: %v\n", trackAs, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Fatalf("Failed to commit %s: %v\n", filename, err)
+	}
+
+	fmt.Printf("✓ %s\n", filename)
 }

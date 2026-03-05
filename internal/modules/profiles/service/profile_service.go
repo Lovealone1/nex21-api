@@ -2,11 +2,36 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
 	"github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
 	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
 )
+
+// ProfileRole represents a valid role in the system.
+// Must stay in sync with the `profile_role` ENUM in Postgres (migration 000002).
+type ProfileRole string
+
+const (
+	RoleOwner  ProfileRole = "owner"  // Tenant owner – full control
+	RoleAdmin  ProfileRole = "admin"  // Tenant admin – manage users & settings
+	RoleStaff  ProfileRole = "staff"  // Operational staff – day-to-day access
+	RoleMember ProfileRole = "member" // Regular member – limited read access
+)
+
+// validRoles is the single source of truth for allowed roles.
+var validRoles = map[ProfileRole]bool{
+	RoleOwner:  true,
+	RoleAdmin:  true,
+	RoleStaff:  true,
+	RoleMember: true,
+}
+
+// IsValidRole returns true if the given string is a recognised ProfileRole.
+func IsValidRole(r string) bool {
+	return validRoles[ProfileRole(r)]
+}
 
 // ProfileService defines the use cases for managing user profiles.
 type ProfileService interface {
@@ -19,7 +44,8 @@ type RegisterInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	FullName string `json:"full_name"`
-	Role     string `json:"role"`
+	// Role must be one of: owner, admin, staff, member. Defaults to "member" if empty.
+	Role string `json:"role"`
 }
 
 type profileService struct {
@@ -42,7 +68,10 @@ func (s *profileService) RegisterNewProfile(ctx context.Context, input RegisterI
 	}
 
 	if input.Role == "" {
-		input.Role = "member" // default role
+		input.Role = string(RoleMember) // default role
+	} else if !IsValidRole(input.Role) {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.Register",
+			fmt.Sprintf("invalid role %q: must be one of owner, admin, staff, member", input.Role))
 	}
 
 	// 2. Call Supabase Admin API to create the Identity (Auth Layer)

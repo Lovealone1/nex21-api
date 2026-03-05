@@ -1,4 +1,4 @@
-.PHONY: dev server worker tidy
+.PHONY: dev server worker tidy migrate-up migrate-down
 
 dev:
 	air
@@ -14,3 +14,9 @@ swagger:
 
 tidy:
 	go mod tidy
+
+migrate-up:
+	go run ./cmd/migrate up
+
+migrate-down:
+	go run ./cmd/migrate down $(STEPS)
