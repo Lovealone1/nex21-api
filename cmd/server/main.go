@@ -50,6 +50,7 @@ func main() {
 	// Core middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -73,12 +74,11 @@ func main() {
 
 		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
 
-			// Si llegó hasta aquí, el middleware ya validó que el User tiene acceso al Tenant
-			// y adjuntó el TenantID seguro al Request Context.
-			tenantID := db.ExtractTenant(r.Context())
+			// El middleware ya validó la membresía e inyectó un Actor. Si no, MustActor hara panic que será atrapado por Recoverer.
+			actor := db.MustActor(r.Context())
 
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + tenantID + `"}`))
+			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + actor.TenantID + ` para el usuario ` + actor.UserID + ` con rol ` + actor.Role + `"}`))
 		})
 	})
 
