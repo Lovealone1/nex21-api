@@ -10,6 +10,7 @@ import (
 type AuthProvider interface {
 	Login(ctx context.Context, email, password string) (*LoginResponse, error)
 	GetUser(ctx context.Context, token string) (*UserDTO, error)
+	AdminCreateUser(ctx context.Context, email, password string, metadata map[string]interface{}) (string, error)
 }
 
 // AuthService implements the application business rules for authentication.

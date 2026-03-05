@@ -34,10 +34,10 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body github.com/Lovealone1/nex21-api/internal/modules/auth/application.LoginRequest true "Credentials"
-// @Success 200 {object} github.com/Lovealone1/nex21-api/internal/modules/auth/application.LoginResponse
-// @Failure 400 {object} github.com/Lovealone1/nex21-api/internal/platform/apperrors.HTTPErrorResponse
-// @Failure 401 {object} github.com/Lovealone1/nex21-api/internal/platform/apperrors.HTTPErrorResponse
+// @Param request body application.LoginRequest true "Credentials"
+// @Success 200 {object} application.LoginResponse
+// @Failure 400 {object} errors.HTTPErrorResponse
+// @Failure 401 {object} errors.HTTPErrorResponse
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req application.LoginRequest
@@ -63,8 +63,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Tags Auth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} github.com/Lovealone1/nex21-api/internal/modules/auth/application.UserDTO
-// @Failure 401 {object} github.com/Lovealone1/nex21-api/internal/platform/apperrors.HTTPErrorResponse
+// @Success 200 {object} application.UserDTO
+// @Failure 401 {object} errors.HTTPErrorResponse
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")

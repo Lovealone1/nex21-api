@@ -8,6 +8,9 @@ server:
 
 worker:
 	go run ./cmd/worker
+	
+swagger:
+	swag init -g cmd/server/main.go 
 
 tidy:
 	go mod tidy

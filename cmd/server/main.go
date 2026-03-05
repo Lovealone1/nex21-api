@@ -14,6 +14,10 @@ import (
 
 	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
 	"github.com/Lovealone1/nex21-api/internal/infrastructure/postgres"
+	authInfra "github.com/Lovealone1/nex21-api/internal/modules/auth/infra"
+	profileRepo "github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
+	profileService "github.com/Lovealone1/nex21-api/internal/modules/profiles/service"
+	profileHttp "github.com/Lovealone1/nex21-api/internal/modules/profiles/transport/http"
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
@@ -49,7 +53,14 @@ func main() {
 
 	// Create the core TenantStore implementing the Repo Contract
 	tenantStore := postgres.NewTenantStore(sqlDB)
-	_ = tenantStore // TODO: Inject this into your domains Repositories here
+
+	// Initialize Identity Provider (Supabase Auth)
+	authProvider := authInfra.NewSupabaseClient(cfg.SupabaseURL, cfg.SupabaseAnonKey, cfg.SupabaseServiceKey)
+
+	// Initialize Profiles Module (Domain Repo + Service + Handler)
+	profRepo := profileRepo.NewProfileRepo(tenantStore)
+	profService := profileService.NewProfileService(profRepo, authProvider)
+	profHandler := profileHttp.NewProfileHandler(profService)
 
 	// Router
 	r := chi.NewRouter()
@@ -80,13 +91,19 @@ func main() {
 		r.Use(appMiddleware.TenantMiddleware(database))
 
 		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
-
 			// El middleware ya validó la membresía e inyectó un Actor. Si no, MustActor hara panic que será atrapado por Recoverer.
 			actor := db.MustActor(r.Context())
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + actor.TenantID + ` para el usuario ` + actor.UserID + ` con rol ` + actor.Role + `"}`))
 		})
+
+	})
+
+	// Admin isolated routes — no tenant middleware required.
+	// The caller provides tenant_id in the JSON body, handled inside the service layer.
+	r.Route("/api/admin/v1", func(r chi.Router) {
+		r.Route("/profiles", profHandler.RegisterRoutes)
 	})
 
 	// HTTP Server

@@ -15,9 +15,10 @@ import (
 
 // SupabaseClient implements the AuthProvider interface using GoTrue endpoints.
 type SupabaseClient struct {
-	baseURL string
-	anonKey string
-	client  *http.Client
+	baseURL        string
+	anonKey        string
+	serviceRoleKey string
+	client         *http.Client
 }
 
 type supabaseTokenRequest struct {
@@ -32,10 +33,11 @@ type supabaseError struct {
 }
 
 // NewSupabaseClient provisions the client with connection configs.
-func NewSupabaseClient(url, anonKey string) *SupabaseClient {
+func NewSupabaseClient(url, anonKey, serviceRoleKey string) *SupabaseClient {
 	return &SupabaseClient{
-		baseURL: url,
-		anonKey: anonKey,
+		baseURL:        url,
+		anonKey:        anonKey,
+		serviceRoleKey: serviceRoleKey,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -114,4 +116,67 @@ func (s *SupabaseClient) GetUser(ctx context.Context, token string) (*applicatio
 	}
 
 	return &parsedResp, nil
+}
+
+type supabaseAdminCreateRequest struct {
+	Email        string                 `json:"email"`
+	Password     string                 `json:"password"`
+	EmailConfirm bool                   `json:"email_confirm"`
+	UserMetadata map[string]interface{} `json:"user_metadata"`
+}
+
+type supabaseAdminCreateResponse struct {
+	ID string `json:"id"`
+}
+
+// AdminCreateUser invokes GoTrue Admin API to create a user and map their UID.
+// Requires serviceRoleKey.
+func (s *SupabaseClient) AdminCreateUser(ctx context.Context, email, password string, metadata map[string]interface{}) (string, error) {
+	if s.serviceRoleKey == "" {
+		return "", errors.New(errors.Internal, "SupabaseClient.AdminCreateUser", "Service role key not configured")
+	}
+
+	endpoint := fmt.Sprintf("%s/auth/v1/admin/users", s.baseURL)
+
+	reqBody, _ := json.Marshal(supabaseAdminCreateRequest{
+		Email:        email,
+		Password:     password,
+		EmailConfirm: true, // Auto confirm for admin-created profiles
+		UserMetadata: metadata,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", errors.New(errors.Internal, "SupabaseClient.AdminCreateUser", "Failed to build request")
+	}
+
+	// Admin operations require the service_role key to bypass RLS and Auth rules
+	req.Header.Set("apikey", s.serviceRoleKey)
+	req.Header.Set("Authorization", "Bearer "+s.serviceRoleKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", errors.New(errors.Unavailable, "SupabaseClient.AdminCreateUser", "Failed to reach identity provider")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		var supErr supabaseError
+		if err := json.NewDecoder(resp.Body).Decode(&supErr); err == nil {
+			msg := supErr.ErrorDescription
+			if msg == "" {
+				msg = supErr.Message
+			}
+			return "", errors.New(errors.Internal, "SupabaseClient.AdminCreateUser", msg)
+		}
+		return "", errors.Errorf(errors.Internal, "SupabaseClient.AdminCreateUser", "IdentityProvider returned status: %d", resp.StatusCode)
+	}
+
+	var parsedResp supabaseAdminCreateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsedResp); err != nil {
+		return "", errors.New(errors.Internal, "SupabaseClient.AdminCreateUser", "Failed to decode auth response")
+	}
+
+	return parsedResp.ID, nil
 }
