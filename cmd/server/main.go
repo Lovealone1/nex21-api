@@ -13,6 +13,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
+	"github.com/Lovealone1/nex21-api/internal/infrastructure/postgres"
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
@@ -40,9 +41,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	// Extract the underlying *sql.DB if we want to defer close, but GORM handles pooling.
-	// sqlDB, _ := database.DB.DB()
-	// defer sqlDB.Close()
+	// Extract the underlying *sql.DB to pass to our custom Tenant Infrastructure
+	sqlDB, err := database.DB.DB()
+	if err != nil {
+		log.Fatalf("Failed to extract sql.DB from gorm: %v", err)
+	}
+
+	// Create the core TenantStore implementing the Repo Contract
+	tenantStore := postgres.NewTenantStore(sqlDB)
+	_ = tenantStore // TODO: Inject this into your domains Repositories here
 
 	// Router
 	r := chi.NewRouter()
