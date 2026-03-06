@@ -16,7 +16,7 @@ type Member struct {
 	TenantID string `json:"tenant_id"` // The tenant they belong to
 	UserID   string `json:"user_id"`   // The user's ID (profile ID / auth UID)
 	Role     string `json:"role"`      // Role in this specific tenant
-	Status   string `json:"status"`    // Status in this specific tenant (active/inactive)
+	IsActive bool   `json:"is_active"` // Status in this specific tenant
 
 	// Enriched data from User Profile
 	Email    string `json:"email"`
@@ -32,7 +32,7 @@ type MembershipModel struct {
 	TenantID  string         `gorm:"type:uuid;not null"`
 	UserID    string         `gorm:"type:uuid;not null"`
 	Role      string         `gorm:"type:text;not null"`
-	Status    string         `gorm:"type:text;not null"`
+	IsActive  bool           `gorm:"type:boolean;not null;default:true"`
 	CreatedAt time.Time      `gorm:"autoCreateTime"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
 	Profile   domain.Profile `gorm:"foreignKey:UserID;references:ID"`
@@ -59,7 +59,7 @@ func (m *MembershipModel) toAggregate() *Member {
 		TenantID:  m.TenantID,
 		UserID:    m.UserID,
 		Role:      m.Role,
-		Status:    m.Status,
+		IsActive:  m.IsActive,
 		Email:     email,
 		FullName:  fullName,
 		CreatedAt: m.CreatedAt,
@@ -99,13 +99,19 @@ func (r *memberRepo) AddMember(ctx context.Context, tenantID, userID, role strin
 		TenantID: tenantID,
 		UserID:   userID,
 		Role:     role,
-		Status:   "active",
+		IsActive: true,
 	}
 
 	result := r.db.WithContext(ctx).Create(&model)
 	if result.Error != nil {
 		return nil, result.Error
 	}
+
+	// Sync the "active" context in the profiles table to this new tenant.
+	// We safely ignore the error since the membership is the source of truth for authorization.
+	r.db.WithContext(ctx).Exec(`
+		UPDATE profiles SET tenant_id = ? WHERE id = ?
+	`, tenantID, userID)
 
 	return r.GetMember(ctx, tenantID, userID)
 }
@@ -147,7 +153,7 @@ func (r *memberRepo) UpdateRole(ctx context.Context, tenantID, userID, role stri
 func (r *memberRepo) ToggleStatus(ctx context.Context, tenantID, userID string) (*Member, error) {
 	result := r.db.WithContext(ctx).Exec(`
 		UPDATE memberships
-		SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END
+		SET is_active = NOT is_active, updated_at = now()
 		WHERE tenant_id = ? AND user_id = ?
 	`, tenantID, userID)
 
@@ -157,11 +163,6 @@ func (r *memberRepo) ToggleStatus(ctx context.Context, tenantID, userID string) 
 	if result.RowsAffected == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-
-	// Touch the updated_at timestamp since we ran a raw query
-	r.db.WithContext(ctx).Model(&MembershipModel{}).
-		Where("tenant_id = ? AND user_id = ?", tenantID, userID).
-		Update("updated_at", time.Now())
 
 	return r.GetMember(ctx, tenantID, userID)
 }
@@ -189,7 +190,7 @@ var sortableMemberColumns = map[string]bool{
 	"created_at": true,
 	"updated_at": true,
 	"role":       true,
-	"status":     true,
+	"is_active":  true,
 	"email":      true,
 	"full_name":  true,
 }

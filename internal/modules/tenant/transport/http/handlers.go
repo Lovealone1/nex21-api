@@ -44,7 +44,7 @@ func (h *TenantHandler) RegisterRoutes(r chi.Router) {
 
 // CreateTenant
 // @Summary      Create a new Tenant
-// @Description  Registers a new tenant. Name and slug are required. Plan defaults to "free", status defaults to "active".
+// @Description  Registers a new tenant. Name and slug are required. Plan defaults to "free", is_active defaults to "true".
 // @Tags         Tenants
 // @Accept       json
 // @Produce      json
@@ -170,7 +170,7 @@ func (h *TenantHandler) DeleteTenant(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        page      query     int     false  "Page number (1-based, default: 1)"
 // @Param        limit     query     int     false  "Records per page (default: 20, max: 100)"
-// @Param        sort_by   query     string  false  "Sort column: created_at | updated_at | name | slug | plan | status"
+// @Param        sort_by   query     string  false  "Sort column: created_at | updated_at | name | slug | plan | is_active"
 // @Param        sort_dir  query     string  false  "Sort direction: ASC | DESC (default: DESC)"
 // @Success      200       {object}  TenantListResponse
 // @Failure      401       {object}  errors.HTTPErrorResponse
@@ -179,7 +179,7 @@ func (h *TenantHandler) DeleteTenant(w http.ResponseWriter, r *http.Request) {
 // @Router       /api/admin/v1/tenants [get]
 func (h *TenantHandler) ListTenants(w http.ResponseWriter, r *http.Request) {
 	page := pagination.ParseRequest(r,
-		"created_at", "updated_at", "name", "slug", "plan", "status",
+		"created_at", "updated_at", "name", "slug", "plan", "is_active",
 	)
 
 	result, err := h.svc.ListTenants(r.Context(), page)

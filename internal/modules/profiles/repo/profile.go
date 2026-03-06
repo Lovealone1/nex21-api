@@ -13,10 +13,10 @@ import (
 // A Profile is always mapped 1:1 to a Supabase auth.users UID.
 type Profile struct {
 	ID        string    `json:"id"`        // This is the UUID from Supabase Auth
-	TenantID  string    `json:"tenant_id"` // Tenant isolation boundary
+	TenantID  *string   `json:"tenant_id"` // Tenant isolation boundary (Nullable for unbound users)
 	Email     string    `json:"email"`
 	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"`      // e.g., 'owner', 'admin', 'staff', 'member'
+	Role      string    `json:"role"`      // System role
 	IsActive  bool      `json:"is_active"` // Whether the profile is enabled
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -75,7 +75,7 @@ func (r *profileRepo) Create(ctx context.Context, profile *Profile) error {
 
 		err := q.QueryRow(ctx, query,
 			profile.ID,
-			txSession.TenantID(),
+			profile.TenantID, // can be nil
 			profile.Email,
 			profile.FullName,
 			profile.Role,
@@ -85,7 +85,6 @@ func (r *profileRepo) Create(ctx context.Context, profile *Profile) error {
 			return err
 		}
 
-		profile.TenantID = txSession.TenantID()
 		return nil
 	})
 }
@@ -107,9 +106,10 @@ func (r *profileRepo) GetByID(ctx context.Context, id string) (*Profile, error) 
 			WHERE id = $1
 		`
 
-		return q.QueryRow(ctx, query, id).Scan(
+		var nullTenant sql.NullString
+		err := q.QueryRow(ctx, query, id).Scan(
 			&p.ID,
-			&p.TenantID,
+			&nullTenant,
 			&p.Email,
 			&p.FullName,
 			&p.Role,
@@ -117,6 +117,11 @@ func (r *profileRepo) GetByID(ctx context.Context, id string) (*Profile, error) 
 			&p.CreatedAt,
 			&p.UpdatedAt,
 		)
+
+		if nullTenant.Valid {
+			p.TenantID = &nullTenant.String
+		}
+		return err
 	})
 
 	if err != nil {
@@ -155,7 +160,10 @@ func (r *profileRepo) AdminGetByID(ctx context.Context, id string) (*Profile, er
 	if err != nil {
 		return nil, err
 	}
-	p.TenantID = tenantID.String
+
+	if tenantID.Valid {
+		p.TenantID = &tenantID.String
+	}
 	p.Email = email.String
 	p.FullName = fullName.String
 
@@ -202,7 +210,10 @@ func (r *profileRepo) AdminUpdate(ctx context.Context, id string, fields UpdateF
 	if err != nil {
 		return nil, err
 	}
-	p.TenantID = tenantID.String
+
+	if tenantID.Valid {
+		p.TenantID = &tenantID.String
+	}
 	p.Email = email.String
 	p.FullName = fullName.String
 
@@ -241,7 +252,10 @@ func (r *profileRepo) AdminToggleStatus(ctx context.Context, id string) (*Profil
 	if err != nil {
 		return nil, err
 	}
-	p.TenantID = tenantID.String
+
+	if tenantID.Valid {
+		p.TenantID = &tenantID.String
+	}
 	p.Email = email.String
 	p.FullName = fullName.String
 
@@ -311,7 +325,9 @@ func (r *profileRepo) AdminListAll(ctx context.Context, page store.Page) (store.
 		); err != nil {
 			return store.ResultList[Profile]{}, err
 		}
-		p.TenantID = tenantID.String
+		if tenantID.Valid {
+			p.TenantID = &tenantID.String
+		}
 		p.Email = email.String
 		p.FullName = fullName.String
 		profiles = append(profiles, p)

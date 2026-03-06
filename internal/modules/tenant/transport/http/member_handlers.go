@@ -83,7 +83,7 @@ func (h *MemberHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 // @Param        id        path      string  true   "Tenant UUID"
 // @Param        page      query     int     false  "Page number (1-based, default: 1)"
 // @Param        limit     query     int     false  "Records per page (default: 20, max: 100)"
-// @Param        sort_by   query     string  false  "Sort column: created_at | updated_at | role | status | email | full_name"
+// @Param        sort_by   query     string  false  "Sort column: created_at | updated_at | role | is_active | email | full_name"
 // @Param        sort_dir  query     string  false  "Sort direction: ASC | DESC (default: DESC)"
 // @Success      200       {object}  MemberListResponse
 // @Failure      401       {object}  errors.HTTPErrorResponse
@@ -94,7 +94,7 @@ func (h *MemberHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "id")
 
 	page := pagination.ParseRequest(r,
-		"created_at", "updated_at", "role", "status", "email", "full_name",
+		"created_at", "updated_at", "role", "is_active", "email", "full_name",
 	)
 
 	result, err := h.svc.ListMembers(r.Context(), tenantID, page)
@@ -149,7 +149,7 @@ func (h *MemberHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 
 // ToggleStatus
 // @Summary      Toggle a member's active status
-// @Description  Automatically flips a member's status between "active" and "inactive" inside the tenant.
+// @Description  Automatically flips a member's is_active boolean inside the tenant.
 // @Tags         Tenant Members
 // @Produce      json
 // @Param        id        path      string  true  "Tenant UUID"

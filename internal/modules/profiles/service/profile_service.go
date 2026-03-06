@@ -38,7 +38,6 @@ func IsValidRole(r string) bool {
 
 // RegisterInput represents the Data Transfer Object for creating a new user.
 type RegisterInput struct {
-	TenantID string `json:"tenant_id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	FullName string `json:"full_name"`
@@ -97,8 +96,8 @@ func NewProfileService(r repo.ProfileRepo, auth application.AuthProvider) Profil
 
 func (s *profileService) RegisterNewProfile(ctx context.Context, input RegisterInput) (*repo.Profile, error) {
 	// 1. Validate Input (Basic business rules)
-	if input.TenantID == "" || input.Email == "" || input.Password == "" || input.FullName == "" {
-		return nil, errors.New(errors.InvalidArgument, "ProfileService.Register", "tenant_id, email, password, and full name are required")
+	if input.Email == "" || input.Password == "" || input.FullName == "" {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.Register", "email, password, and full name are required")
 	}
 
 	if input.Role == "" {
@@ -109,12 +108,11 @@ func (s *profileService) RegisterNewProfile(ctx context.Context, input RegisterI
 	}
 
 	// 2. Call Supabase Admin API to create the Identity (Auth Layer)
-	// Pass tenant_id in metadata so the DB trigger `on_auth_user_created`
-	// can set it automatically on the profiles row it creates.
+	// The DB trigger `on_auth_user_created`
+	// can handle profiles row automatically, with tenant_id being NULL.
 	metadata := map[string]interface{}{
 		"full_name": input.FullName,
 		"role":      input.Role,
-		"tenant_id": input.TenantID,
 	}
 
 	uid, err := s.authProvider.AdminCreateUser(ctx, input.Email, input.Password, metadata)
@@ -126,7 +124,7 @@ func (s *profileService) RegisterNewProfile(ctx context.Context, input RegisterI
 	// The DB trigger `on_auth_user_created` handles the INSERT into public.profiles.
 	profile := &repo.Profile{
 		ID:       uid,
-		TenantID: input.TenantID,
+		TenantID: nil, // Starts without a tenant
 		Email:    input.Email,
 		FullName: input.FullName,
 		Role:     input.Role,

@@ -9,10 +9,10 @@ import (
 // Tenant represents the public.tenants table
 type Tenant struct {
 	db.BaseModel
-	Name   string `gorm:"type:text;not null"`
-	Slug   string `gorm:"type:text;not null;unique"`
-	Plan   string `gorm:"type:text;not null;default:'free'"`
-	Status string `gorm:"type:text;not null;default:'active'"`
+	Name     string `gorm:"type:text;not null"`
+	Slug     string `gorm:"type:text;not null;unique"`
+	Plan     string `gorm:"type:text;not null;default:'free'"`
+	IsActive bool   `gorm:"type:boolean;not null;default:true"`
 
 	// Relationships
 	Domains     []TenantDomain `gorm:"foreignKey:TenantID"`
@@ -35,5 +35,5 @@ type Membership struct {
 	TenantID string `gorm:"type:uuid;not null;index:memberships_tenant_id_idx"`
 	UserID   string `gorm:"type:uuid;not null;index:memberships_user_id_idx"`
 	Role     string `gorm:"type:text;not null;default:'member'"`
-	Status   string `gorm:"type:text;not null;default:'active'"`
+	IsActive bool   `gorm:"type:boolean;not null;default:true"`
 }

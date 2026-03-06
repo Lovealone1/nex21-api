@@ -19,12 +19,6 @@ var validPlans = map[string]bool{
 	"enterprise": true,
 }
 
-var validStatuses = map[string]bool{
-	"active":    true,
-	"inactive":  true,
-	"suspended": true,
-}
-
 // ─── DTOs ────────────────────────────────────────────────────────────────────
 
 // CreateTenantInput contains the required and optional fields for creating a tenant.
@@ -36,18 +30,17 @@ type CreateTenantInput struct {
 	// Plan is the billing plan. Defaults to "free" if empty.
 	// Valid values: free, starter, pro, enterprise.
 	Plan string `json:"plan,omitempty"`
-	// Status is the tenant's lifecycle status. Defaults to "active" if empty.
-	// Valid values: active, inactive, suspended.
-	Status string `json:"status,omitempty"`
+	// IsActive is the tenant's lifecycle status. Defaults to true if empty.
+	IsActive *bool `json:"is_active,omitempty"`
 }
 
 // UpdateTenantInput contains the optional fields for patching a tenant.
 // Only non-nil fields are applied — omit any field you don't want to change.
 type UpdateTenantInput struct {
-	Name   *string `json:"name,omitempty"`
-	Slug   *string `json:"slug,omitempty"`
-	Plan   *string `json:"plan,omitempty"`
-	Status *string `json:"status,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Slug     *string `json:"slug,omitempty"`
+	Plan     *string `json:"plan,omitempty"`
+	IsActive *bool   `json:"is_active,omitempty"`
 }
 
 // ─── Interface ───────────────────────────────────────────────────────────────
@@ -89,18 +82,16 @@ func (s *tenantService) CreateTenant(ctx context.Context, input CreateTenantInpu
 			fmt.Sprintf("invalid plan %q: must be one of free, starter, pro, enterprise", input.Plan))
 	}
 
-	if input.Status == "" {
-		input.Status = "active"
-	} else if !validStatuses[input.Status] {
-		return nil, errors.New(errors.InvalidArgument, "TenantService.Create",
-			fmt.Sprintf("invalid status %q: must be one of active, inactive, suspended", input.Status))
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
 	}
 
 	t := &repo.Tenant{
-		Name:   input.Name,
-		Slug:   input.Slug,
-		Plan:   input.Plan,
-		Status: input.Status,
+		Name:     input.Name,
+		Slug:     input.Slug,
+		Plan:     input.Plan,
+		IsActive: isActive,
 	}
 
 	if err := s.repo.Create(ctx, t); err != nil {
@@ -130,7 +121,7 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, input Updat
 	if id == "" {
 		return nil, errors.New(errors.InvalidArgument, "TenantService.Update", "id is required")
 	}
-	if input.Name == nil && input.Slug == nil && input.Plan == nil && input.Status == nil {
+	if input.Name == nil && input.Slug == nil && input.Plan == nil && input.IsActive == nil {
 		return nil, errors.New(errors.InvalidArgument, "TenantService.Update", "at least one field must be provided")
 	}
 
@@ -143,16 +134,11 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, input Updat
 			fmt.Sprintf("invalid plan %q: must be one of free, starter, pro, enterprise", *input.Plan))
 	}
 
-	if input.Status != nil && !validStatuses[*input.Status] {
-		return nil, errors.New(errors.InvalidArgument, "TenantService.Update",
-			fmt.Sprintf("invalid status %q: must be one of active, inactive, suspended", *input.Status))
-	}
-
 	t, err := s.repo.Update(ctx, id, repo.UpdateFields{
-		Name:   input.Name,
-		Slug:   input.Slug,
-		Plan:   input.Plan,
-		Status: input.Status,
+		Name:     input.Name,
+		Slug:     input.Slug,
+		Plan:     input.Plan,
+		IsActive: input.IsActive,
 	})
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

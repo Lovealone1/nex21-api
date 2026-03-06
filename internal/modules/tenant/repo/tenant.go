@@ -16,7 +16,7 @@ type Tenant struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug"`
 	Plan      string    `json:"plan"`
-	Status    string    `json:"status"`
+	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -24,10 +24,10 @@ type Tenant struct {
 // UpdateFields holds the optional fields that can be patched on a Tenant.
 // Pointer types: only non-nil fields are written to the database.
 type UpdateFields struct {
-	Name   *string
-	Slug   *string
-	Plan   *string
-	Status *string
+	Name     *string
+	Slug     *string
+	Plan     *string
+	IsActive *bool
 }
 
 // TenantRepo defines the persistence contract for tenants.
@@ -91,8 +91,8 @@ func (r *tenantRepo) Update(ctx context.Context, id string, fields UpdateFields)
 	if fields.Plan != nil {
 		updates["plan"] = *fields.Plan
 	}
-	if fields.Status != nil {
-		updates["status"] = *fields.Status
+	if fields.IsActive != nil {
+		updates["is_active"] = *fields.IsActive
 	}
 
 	result := r.db.WithContext(ctx).Model(&t).Where("id = ?", id).Updates(updates)
@@ -133,7 +133,7 @@ var sortableColumns = map[string]bool{
 	"name":       true,
 	"slug":       true,
 	"plan":       true,
-	"status":     true,
+	"is_active":  true,
 }
 
 // List returns a paginated list of tenants.
