@@ -15,6 +15,9 @@ import (
 	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
 	"github.com/Lovealone1/nex21-api/internal/infrastructure/postgres"
 	authInfra "github.com/Lovealone1/nex21-api/internal/modules/auth/infra"
+	contactRepo "github.com/Lovealone1/nex21-api/internal/modules/contacts/repo"
+	contactService "github.com/Lovealone1/nex21-api/internal/modules/contacts/service"
+	contactHttp "github.com/Lovealone1/nex21-api/internal/modules/contacts/transport/http"
 	profileRepo "github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
 	profileService "github.com/Lovealone1/nex21-api/internal/modules/profiles/service"
 	profileHttp "github.com/Lovealone1/nex21-api/internal/modules/profiles/transport/http"
@@ -85,6 +88,11 @@ func main() {
 	memberService := tenantService.NewMemberService(memberRepo)
 	memberHandler := tenantHttp.NewMemberHandler(memberService)
 
+	// Initialize Contacts Module
+	contRepo := contactRepo.NewContactRepo(database.DB)
+	contService := contactService.NewContactService(contRepo)
+	contHandler := contactHttp.NewContactHandler(contService)
+
 	// Router
 	r := chi.NewRouter()
 
@@ -132,6 +140,8 @@ func main() {
 			tenHandler.RegisterRoutes(r)
 			// Mount membership sub-routes
 			r.Route("/{id}/members", memberHandler.RegisterRoutes)
+			// Mount contact sub-routes
+			r.Route("/{tenantId}/contacts", contHandler.RegisterRoutes)
 		})
 	})
 
