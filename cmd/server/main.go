@@ -54,11 +54,22 @@ func main() {
 	// Create the core TenantStore implementing the Repo Contract
 	tenantStore := postgres.NewTenantStore(sqlDB)
 
+	// Open a dedicated simple-protocol connection for admin repo operations.
+	// pgx's default statement cache (QueryExecModeCacheStatement) causes
+	// "prepared statement already exists" (42P05) when the same physical
+	// connection is reused across queries. Simple protocol sends queries as
+	// plain text — no server-side prepared statements, no collisions.
+	adminDB, err := db.ConnectSimple(cfg.DBUrl)
+	if err != nil {
+		log.Fatalf("Failed to open admin (simple-protocol) DB connection: %v", err)
+	}
+
 	// Initialize Identity Provider (Supabase Auth)
 	authProvider := authInfra.NewSupabaseClient(cfg.SupabaseURL, cfg.SupabaseAnonKey, cfg.SupabaseServiceKey)
 
 	// Initialize Profiles Module (Domain Repo + Service + Handler)
-	profRepo := profileRepo.NewProfileRepo(tenantStore)
+	profRepo := profileRepo.NewProfileRepo(tenantStore, adminDB)
+
 	profService := profileService.NewProfileService(profRepo, authProvider)
 	profHandler := profileHttp.NewProfileHandler(profService)
 

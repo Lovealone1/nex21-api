@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Lovealone1/nex21-api/internal/core/store"
 	"github.com/Lovealone1/nex21-api/internal/modules/auth/application"
 	"github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
 	errors "github.com/Lovealone1/nex21-api/internal/platform/apperrors"
@@ -33,10 +34,7 @@ func IsValidRole(r string) bool {
 	return validRoles[ProfileRole(r)]
 }
 
-// ProfileService defines the use cases for managing user profiles.
-type ProfileService interface {
-	RegisterNewProfile(ctx context.Context, input RegisterInput) (*repo.Profile, error)
-}
+// ─── DTOs ────────────────────────────────────────────────────────────────────
 
 // RegisterInput represents the Data Transfer Object for creating a new user.
 type RegisterInput struct {
@@ -47,6 +45,42 @@ type RegisterInput struct {
 	// Role must be one of: owner, admin, staff, member. Defaults to "member" if empty.
 	Role string `json:"role"`
 }
+
+// UpdateInput holds the mutable fields for a partial profile patch.
+// Only non-empty/non-nil fields are applied.
+type UpdateInput struct {
+	// FullName is the new display name (optional).
+	FullName *string `json:"full_name,omitempty"`
+	// Email is the new email; also updated in Supabase Auth (optional).
+	Email *string `json:"email,omitempty"`
+}
+
+// ChangeRoleInput holds the new role to assign.
+type ChangeRoleInput struct {
+	// Role must be one of: owner, admin, staff, member.
+	Role string `json:"role"`
+}
+
+// ─── Interface ───────────────────────────────────────────────────────────────
+
+// ProfileService defines the use cases for managing user profiles.
+type ProfileService interface {
+	RegisterNewProfile(ctx context.Context, input RegisterInput) (*repo.Profile, error)
+	// DeleteProfile removes the user identity from Supabase Auth and their profile row.
+	DeleteProfile(ctx context.Context, id string) error
+	// UpdateProfile applies a partial patch (full_name, email) to the profile.
+	UpdateProfile(ctx context.Context, id string, input UpdateInput) (*repo.Profile, error)
+	// ChangeRole replaces the current role of a profile with the one provided.
+	ChangeRole(ctx context.Context, id string, input ChangeRoleInput) (*repo.Profile, error)
+	// ToggleStatus inverts the is_active flag of the profile.
+	ToggleStatus(ctx context.Context, id string) (*repo.Profile, error)
+	// ListProfiles returns a paginated list of all profiles.
+	ListProfiles(ctx context.Context, page store.Page) (store.ResultList[repo.Profile], error)
+	// GetProfileByID fetches a single profile by its UID.
+	GetProfileByID(ctx context.Context, id string) (*repo.Profile, error)
+}
+
+// ─── Implementation ──────────────────────────────────────────────────────────
 
 type profileService struct {
 	repo         repo.ProfileRepo
@@ -96,6 +130,120 @@ func (s *profileService) RegisterNewProfile(ctx context.Context, input RegisterI
 		Email:    input.Email,
 		FullName: input.FullName,
 		Role:     input.Role,
+		IsActive: true,
+	}
+
+	return profile, nil
+}
+
+// DeleteProfile removes a user from Supabase Auth.
+// The FK `profiles(id) REFERENCES auth.users(id) ON DELETE CASCADE` guarantees
+// that the profile row is automatically removed by PostgreSQL the instant Supabase
+// Auth deletes the auth.users record. Calling repo.Delete() explicitly afterwards
+// would fail because the tenant session can no longer validate the (already gone)
+// profile membership.
+func (s *profileService) DeleteProfile(ctx context.Context, id string) error {
+	if id == "" {
+		return errors.New(errors.InvalidArgument, "ProfileService.Delete", "id is required")
+	}
+
+	// Deleting the auth.users row triggers the CASCADE that removes the profile row.
+	if err := s.authProvider.AdminDeleteUser(ctx, id); err != nil {
+		return errors.Wrap(err, errors.Internal, "ProfileService.Delete", "Failed to delete identity in Supabase Auth")
+	}
+
+	return nil
+}
+
+// UpdateProfile applies a partial update on the mutable fields: full_name and/or email.
+// If email changes it is also updated in Supabase Auth.
+func (s *profileService) UpdateProfile(ctx context.Context, id string, input UpdateInput) (*repo.Profile, error) {
+	if id == "" {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.Update", "id is required")
+	}
+	if input.FullName == nil && input.Email == nil {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.Update", "at least one of full_name or email must be provided")
+	}
+
+	// 1. If email is changing, update auth identity first.
+	if input.Email != nil {
+		authUpdates := map[string]interface{}{"email": *input.Email}
+		if input.FullName != nil {
+			authUpdates["full_name"] = *input.FullName
+		}
+		if err := s.authProvider.AdminUpdateUser(ctx, id, authUpdates); err != nil {
+			return nil, errors.Wrap(err, errors.Internal, "ProfileService.Update", "Failed to update identity in Supabase Auth")
+		}
+	}
+
+	// 2. Persist changes in DB via admin (no tenant session required on admin routes).
+	updated, err := s.repo.AdminUpdate(ctx, id, repo.UpdateFields{
+		FullName: input.FullName,
+		Email:    input.Email,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, errors.Internal, "ProfileService.Update", "Failed to update profile in database")
+	}
+
+	return updated, nil
+}
+
+// ChangeRole replaces the profile's role with the one provided in the input.
+func (s *profileService) ChangeRole(ctx context.Context, id string, input ChangeRoleInput) (*repo.Profile, error) {
+	if id == "" {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.ChangeRole", "id is required")
+	}
+	if !IsValidRole(input.Role) {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.ChangeRole",
+			fmt.Sprintf("invalid role %q: must be one of owner, admin, staff, member", input.Role))
+	}
+
+	updated, err := s.repo.AdminUpdate(ctx, id, repo.UpdateFields{
+		Role: &input.Role,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, errors.Internal, "ProfileService.ChangeRole", "Failed to update role in database")
+	}
+
+	return updated, nil
+}
+
+// ToggleStatus atomically inverts the is_active flag of the profile.
+// Uses a single UPDATE query to avoid pgx prepared-statement conflicts (42P05)
+// that occur when two queries share the same pool connection.
+func (s *profileService) ToggleStatus(ctx context.Context, id string) (*repo.Profile, error) {
+	if id == "" {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.ToggleStatus", "id is required")
+	}
+
+	updated, err := s.repo.AdminToggleStatus(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.Internal, "ProfileService.ToggleStatus", "Failed to toggle status in database")
+	}
+
+	return updated, nil
+}
+
+// ListProfiles returns a paginated list of all profiles.
+func (s *profileService) ListProfiles(ctx context.Context, page store.Page) (store.ResultList[repo.Profile], error) {
+	result, err := s.repo.AdminListAll(ctx, page)
+	if err != nil {
+		return store.ResultList[repo.Profile]{}, errors.Wrap(err, errors.Internal, "ProfileService.ListProfiles", "Failed to list profiles")
+	}
+
+	return result, nil
+}
+
+// GetProfileByID fetches a single profile by its UID.
+// Uses AdminGetByID since this is called from an admin route with no tenant session.
+func (s *profileService) GetProfileByID(ctx context.Context, id string) (*repo.Profile, error) {
+	if id == "" {
+		return nil, errors.New(errors.InvalidArgument, "ProfileService.GetProfileByID", "id is required")
+	}
+
+	profile, err := s.repo.AdminGetByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.NotFound, "ProfileService.GetProfileByID", "Profile not found")
 	}
 
 	return profile, nil

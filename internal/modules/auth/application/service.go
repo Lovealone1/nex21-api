@@ -11,6 +11,10 @@ type AuthProvider interface {
 	Login(ctx context.Context, email, password string) (*LoginResponse, error)
 	GetUser(ctx context.Context, token string) (*UserDTO, error)
 	AdminCreateUser(ctx context.Context, email, password string, metadata map[string]interface{}) (string, error)
+	// AdminDeleteUser permanently removes a user from Supabase Auth by their UID.
+	AdminDeleteUser(ctx context.Context, uid string) error
+	// AdminUpdateUser updates mutable auth fields (email and/or user_metadata) for the given UID.
+	AdminUpdateUser(ctx context.Context, uid string, updates map[string]interface{}) error
 }
 
 // AuthService implements the application business rules for authentication.

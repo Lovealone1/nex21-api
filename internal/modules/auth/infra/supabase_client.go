@@ -180,3 +180,104 @@ func (s *SupabaseClient) AdminCreateUser(ctx context.Context, email, password st
 
 	return parsedResp.ID, nil
 }
+
+// AdminDeleteUser invokes GoTrue Admin API to permanently delete a user by UID.
+// Requires serviceRoleKey.
+func (s *SupabaseClient) AdminDeleteUser(ctx context.Context, uid string) error {
+	if s.serviceRoleKey == "" {
+		return errors.New(errors.Internal, "SupabaseClient.AdminDeleteUser", "Service role key not configured")
+	}
+
+	endpoint := fmt.Sprintf("%s/auth/v1/admin/users/%s", s.baseURL, uid)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return errors.New(errors.Internal, "SupabaseClient.AdminDeleteUser", "Failed to build request")
+	}
+
+	req.Header.Set("apikey", s.serviceRoleKey)
+	req.Header.Set("Authorization", "Bearer "+s.serviceRoleKey)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return errors.New(errors.Unavailable, "SupabaseClient.AdminDeleteUser", "Failed to reach identity provider")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		var supErr supabaseError
+		if err := json.NewDecoder(resp.Body).Decode(&supErr); err == nil {
+			msg := supErr.ErrorDescription
+			if msg == "" {
+				msg = supErr.Message
+			}
+			return errors.New(errors.Internal, "SupabaseClient.AdminDeleteUser", msg)
+		}
+		return errors.Errorf(errors.Internal, "SupabaseClient.AdminDeleteUser", "IdentityProvider returned status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+type supabaseAdminUpdateRequest struct {
+	Email        string                 `json:"email,omitempty"`
+	UserMetadata map[string]interface{} `json:"user_metadata,omitempty"`
+}
+
+// AdminUpdateUser invokes GoTrue Admin API to update email and/or user_metadata for a given UID.
+// Requires serviceRoleKey. Pass only the fields you want to change inside `updates`.
+// Recognized keys: "email", "full_name".
+func (s *SupabaseClient) AdminUpdateUser(ctx context.Context, uid string, updates map[string]interface{}) error {
+	if s.serviceRoleKey == "" {
+		return errors.New(errors.Internal, "SupabaseClient.AdminUpdateUser", "Service role key not configured")
+	}
+
+	endpoint := fmt.Sprintf("%s/auth/v1/admin/users/%s", s.baseURL, uid)
+
+	payload := supabaseAdminUpdateRequest{}
+	if email, ok := updates["email"].(string); ok && email != "" {
+		payload.Email = email
+	}
+
+	// Separate out user_metadata fields (everything that is not email)
+	meta := map[string]interface{}{}
+	for k, v := range updates {
+		if k != "email" {
+			meta[k] = v
+		}
+	}
+	if len(meta) > 0 {
+		payload.UserMetadata = meta
+	}
+
+	reqBody, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return errors.New(errors.Internal, "SupabaseClient.AdminUpdateUser", "Failed to build request")
+	}
+
+	req.Header.Set("apikey", s.serviceRoleKey)
+	req.Header.Set("Authorization", "Bearer "+s.serviceRoleKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return errors.New(errors.Unavailable, "SupabaseClient.AdminUpdateUser", "Failed to reach identity provider")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		var supErr supabaseError
+		if err := json.NewDecoder(resp.Body).Decode(&supErr); err == nil {
+			msg := supErr.ErrorDescription
+			if msg == "" {
+				msg = supErr.Message
+			}
+			return errors.New(errors.Internal, "SupabaseClient.AdminUpdateUser", msg)
+		}
+		return errors.Errorf(errors.Internal, "SupabaseClient.AdminUpdateUser", "IdentityProvider returned status: %d", resp.StatusCode)
+	}
+
+	return nil
+}

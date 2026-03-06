@@ -131,8 +131,8 @@ func ErrorCode(err error) Code {
 }
 
 // ErrorMessage unwraps an error and returns its message.
-// If the error is not an *Error it returns the err.Error(),
-// or a standard internal server error message if it's sensitive.
+// For domain errors it returns the human-readable message; if there is a root
+// cause error it is appended so the actual failure is surfaced.
 func ErrorMessage(err error) string {
 	if err == nil {
 		return ""
@@ -140,10 +140,11 @@ func ErrorMessage(err error) string {
 
 	var e *Error
 	if As(err, &e) && e.Message != "" {
+		if e.Err != nil {
+			return fmt.Sprintf("%s: %v", e.Message, e.Err)
+		}
 		return e.Message
 	}
 
-	// For non-domain errors, we mask the actual error to the user
-	// to avoid leaking sensitive information unless configured otherwise.
 	return "An internal error occurred."
 }
