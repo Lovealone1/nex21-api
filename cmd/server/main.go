@@ -18,6 +18,9 @@ import (
 	profileRepo "github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
 	profileService "github.com/Lovealone1/nex21-api/internal/modules/profiles/service"
 	profileHttp "github.com/Lovealone1/nex21-api/internal/modules/profiles/transport/http"
+	tenantRepo "github.com/Lovealone1/nex21-api/internal/modules/tenant/repo"
+	tenantService "github.com/Lovealone1/nex21-api/internal/modules/tenant/service"
+	tenantHttp "github.com/Lovealone1/nex21-api/internal/modules/tenant/transport/http"
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
@@ -69,9 +72,18 @@ func main() {
 
 	// Initialize Profiles Module (Domain Repo + Service + Handler)
 	profRepo := profileRepo.NewProfileRepo(tenantStore, adminDB)
-
 	profService := profileService.NewProfileService(profRepo, authProvider)
 	profHandler := profileHttp.NewProfileHandler(profService)
+
+	// Initialize Tenant Module (Repo + Service + Handler)
+	tenRepo := tenantRepo.NewTenantRepo(database.DB)
+	tenService := tenantService.NewTenantService(tenRepo)
+	tenHandler := tenantHttp.NewTenantHandler(tenService)
+
+	// Initialize Tenant Members Module
+	memberRepo := tenantRepo.NewMemberRepo(database.DB)
+	memberService := tenantService.NewMemberService(memberRepo)
+	memberHandler := tenantHttp.NewMemberHandler(memberService)
 
 	// Router
 	r := chi.NewRouter()
@@ -115,6 +127,12 @@ func main() {
 	// The caller provides tenant_id in the JSON body, handled inside the service layer.
 	r.Route("/api/admin/v1", func(r chi.Router) {
 		r.Route("/profiles", profHandler.RegisterRoutes)
+		r.Route("/tenants", func(r chi.Router) {
+			// Mount base tenant CRUD
+			tenHandler.RegisterRoutes(r)
+			// Mount membership sub-routes
+			r.Route("/{id}/members", memberHandler.RegisterRoutes)
+		})
 	})
 
 	// HTTP Server
