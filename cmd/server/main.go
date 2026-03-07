@@ -18,6 +18,9 @@ import (
 	contactRepo "github.com/Lovealone1/nex21-api/internal/modules/contacts/repo"
 	contactService "github.com/Lovealone1/nex21-api/internal/modules/contacts/service"
 	contactHttp "github.com/Lovealone1/nex21-api/internal/modules/contacts/transport/http"
+	productRepo "github.com/Lovealone1/nex21-api/internal/modules/products/repo"
+	productService "github.com/Lovealone1/nex21-api/internal/modules/products/service"
+	productHttp "github.com/Lovealone1/nex21-api/internal/modules/products/transport/http"
 	profileRepo "github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
 	profileService "github.com/Lovealone1/nex21-api/internal/modules/profiles/service"
 	profileHttp "github.com/Lovealone1/nex21-api/internal/modules/profiles/transport/http"
@@ -101,6 +104,11 @@ func main() {
 	svcService := serviceService.NewServiceService(svcRepo)
 	svcHandler := serviceHttp.NewServiceHandler(svcService)
 
+	// Initialize Products Module
+	prodRepo := productRepo.NewProductRepo(database.DB)
+	prodService := productService.NewProductService(prodRepo)
+	prodHandler := productHttp.NewProductHandler(prodService)
+
 	// Router
 	r := chi.NewRouter()
 
@@ -152,6 +160,8 @@ func main() {
 			r.Route("/{tenantId}/contacts", contHandler.RegisterRoutes)
 			// Mount service sub-routes
 			r.Route("/{tenantId}/services", svcHandler.RegisterRoutes)
+			// Mount product sub-routes
+			r.Route("/{tenantId}/products", prodHandler.RegisterRoutes)
 		})
 	})
 
