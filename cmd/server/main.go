@@ -30,6 +30,9 @@ import (
 	serviceRepo "github.com/Lovealone1/nex21-api/internal/modules/services/repo"
 	serviceService "github.com/Lovealone1/nex21-api/internal/modules/services/service"
 	serviceHttp "github.com/Lovealone1/nex21-api/internal/modules/services/transport/http"
+	staffrepo "github.com/Lovealone1/nex21-api/internal/modules/staff/repo"
+	staffservice "github.com/Lovealone1/nex21-api/internal/modules/staff/service"
+	staffhttp "github.com/Lovealone1/nex21-api/internal/modules/staff/transport/http"
 	tenantRepo "github.com/Lovealone1/nex21-api/internal/modules/tenant/repo"
 	tenantService "github.com/Lovealone1/nex21-api/internal/modules/tenant/service"
 	tenantHttp "github.com/Lovealone1/nex21-api/internal/modules/tenant/transport/http"
@@ -117,6 +120,11 @@ func main() {
 	locService := locationService.NewLocationService(locRepo)
 	locHandler := locationHttp.NewLocationHandler(locService)
 
+	// Initialize Staff Module
+	stRepo := staffrepo.NewStaffRepo(database.DB)
+	stService := staffservice.NewStaffService(stRepo)
+	stHandler := staffhttp.NewStaffHandler(stService)
+
 	// Router
 	r := chi.NewRouter()
 
@@ -172,6 +180,8 @@ func main() {
 			r.Route("/{tenantId}/products", prodHandler.RegisterRoutes)
 			// Mount location sub-routes
 			r.Route("/{tenantId}/locations", locHandler.RegisterRoutes)
+			// Mount staff sub-routes
+			r.Route("/{tenantId}/staff", stHandler.RegisterRoutes)
 		})
 	})
 
