@@ -130,10 +130,18 @@ func main() {
 	stService := staffservice.NewStaffService(stRepo)
 	stHandler := staffhttp.NewStaffHandler(stService)
 
-	// Initialize Payroll Module
+	// Initialize Payroll Module (Run, Item, StaffPay)
 	payRepo := payrollrepo.NewStaffPayRepo(database.DB)
 	payService := payrollservice.NewStaffPayService(payRepo)
 	payHandler := payrollhttp.NewStaffPayHandler(payService)
+
+	runRepo := payrollrepo.NewPayrollRunRepo(database.DB)
+	runService := payrollservice.NewPayrollRunService(runRepo)
+	runHandler := payrollhttp.NewPayrollRunHandler(runService)
+
+	itemRepo := payrollrepo.NewPayrollItemRepo(database.DB)
+	itemService := payrollservice.NewPayrollItemService(itemRepo, runRepo)
+	itemHandler := payrollhttp.NewPayrollItemHandler(itemService)
 
 	// Router
 	r := chi.NewRouter()
@@ -194,6 +202,11 @@ func main() {
 			r.Route("/{tenantId}/staff", func(r chi.Router) {
 				stHandler.RegisterRoutes(r)
 				r.Route("/{staffId}/pay", payHandler.RegisterRoutes)
+			})
+			// Mount payroll runs & items sub-routes
+			r.Route("/{tenantId}/payroll/runs", func(r chi.Router) {
+				runHandler.RegisterRoutes(r)
+				r.Route("/{runId}/items", itemHandler.RegisterRoutes)
 			})
 		})
 	})
