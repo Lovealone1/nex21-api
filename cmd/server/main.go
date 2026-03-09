@@ -33,6 +33,11 @@ import (
 	staffrepo "github.com/Lovealone1/nex21-api/internal/modules/staff/repo"
 	staffservice "github.com/Lovealone1/nex21-api/internal/modules/staff/service"
 	staffhttp "github.com/Lovealone1/nex21-api/internal/modules/staff/transport/http"
+
+	payrollrepo "github.com/Lovealone1/nex21-api/internal/modules/payroll/repo"
+	payrollservice "github.com/Lovealone1/nex21-api/internal/modules/payroll/service"
+	payrollhttp "github.com/Lovealone1/nex21-api/internal/modules/payroll/transport/http"
+
 	tenantRepo "github.com/Lovealone1/nex21-api/internal/modules/tenant/repo"
 	tenantService "github.com/Lovealone1/nex21-api/internal/modules/tenant/service"
 	tenantHttp "github.com/Lovealone1/nex21-api/internal/modules/tenant/transport/http"
@@ -125,6 +130,11 @@ func main() {
 	stService := staffservice.NewStaffService(stRepo)
 	stHandler := staffhttp.NewStaffHandler(stService)
 
+	// Initialize Payroll Module
+	payRepo := payrollrepo.NewStaffPayRepo(database.DB)
+	payService := payrollservice.NewStaffPayService(payRepo)
+	payHandler := payrollhttp.NewStaffPayHandler(payService)
+
 	// Router
 	r := chi.NewRouter()
 
@@ -181,7 +191,10 @@ func main() {
 			// Mount location sub-routes
 			r.Route("/{tenantId}/locations", locHandler.RegisterRoutes)
 			// Mount staff sub-routes
-			r.Route("/{tenantId}/staff", stHandler.RegisterRoutes)
+			r.Route("/{tenantId}/staff", func(r chi.Router) {
+				stHandler.RegisterRoutes(r)
+				r.Route("/{staffId}/pay", payHandler.RegisterRoutes)
+			})
 		})
 	})
 
