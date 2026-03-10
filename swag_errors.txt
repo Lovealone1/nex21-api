@@ -1,0 +1,52 @@
+﻿swag init -g cmd/server/main.go 
+2026/03/09 17:18:27 Generate swagger docs....
+2026/03/09 17:18:27 Generate general API Info, search dir:./
+2026/03/09 17:18:27 warning: failed to get package name in dir: ./, error: execute go list command, exit status 1, stdout:, stderr:no Go files in C:\Users\dgo34\OneDrive\Escritorio\NEX21\nex21-api
+2026/03/09 17:18:27 Generating application.LoginRequest
+2026/03/09 17:18:27 Generating application.LoginResponse
+2026/03/09 17:18:27 Generating application.UserDTO
+2026/03/09 17:18:27 Generating errors.HTTPErrorResponse
+2026/03/09 17:18:27 Generating service.CreateContactInput
+2026/03/09 17:18:27 Generating repo.Contact
+2026/03/09 17:18:27 Generating service.UpdateContactInput
+2026/03/09 17:18:27 Generating http.ContactListResponse
+2026/03/09 17:18:27 Generating repo.ContactSummary
+2026/03/09 17:18:27 Generating service.CreateAccountInput
+2026/03/09 17:18:27 Error parsing type definition 'service.CreateAccountInput': [account_type]: cannot find type definition: financedomain.AccountType
+2026/03/09 17:18:27 Skipping 'service.CreateAccountInput', recursion detected.
+2026/03/09 17:18:27 Generating repo.Account
+2026/03/09 17:18:27 Error parsing type definition 'repo.Account': [account_type]: cannot find type definition: financedomain.AccountType
+make : 2026/03/09 
+17:18:27 ParseComment 
+error in file C:\Users\
+dgo34\OneDrive\Escritor
+io\NEX21\nex21-api\inte
+rnal\modules\finance\tr
+ansport\http\account_ha
+ndler.go for comment: 
+'// @Success      201  
+    {object}  
+repo.Account': 
+repo.Account: 
+[account_type]: cannot 
+find type definition: f
+inancedomain.AccountTyp
+e
+En línea: 1 Carácter: 1
++ make swagger 2>&1 | 
+Out-File -Encoding 
+utf8 swag_errors.txt
++ ~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (2026/03/09 17   
+ :1...ain.AccountTy    
+pe:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+make: *** 
+[Makefile:13: swagger] 
+Error 1

@@ -7,22 +7,6 @@ import (
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 )
 
-// Account represents the public.accounts table
-type Account struct {
-	db.TenantBaseModel
-
-	Name        string  `gorm:"type:text;not null"`
-	Code        *string `gorm:"type:text"`
-	AccountType string  `gorm:"type:text;not null;default:'cash'"`
-	Currency    string  `gorm:"type:text;not null;default:'COP'"`
-
-	IsActive  bool `gorm:"not null;default:true"`
-	IsDefault bool `gorm:"not null;default:false"`
-
-	Provider *string `gorm:"type:text"`
-	Notes    *string `gorm:"type:text"`
-}
-
 // Transaction represents the public.transactions table
 type Transaction struct {
 	db.TenantBaseModel

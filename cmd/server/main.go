@@ -38,6 +38,10 @@ import (
 	payrollservice "github.com/Lovealone1/nex21-api/internal/modules/payroll/service"
 	payrollhttp "github.com/Lovealone1/nex21-api/internal/modules/payroll/transport/http"
 
+	financerepo "github.com/Lovealone1/nex21-api/internal/modules/finance/repo"
+	financeservice "github.com/Lovealone1/nex21-api/internal/modules/finance/service"
+	financehttp "github.com/Lovealone1/nex21-api/internal/modules/finance/transport/http"
+
 	tenantRepo "github.com/Lovealone1/nex21-api/internal/modules/tenant/repo"
 	tenantService "github.com/Lovealone1/nex21-api/internal/modules/tenant/service"
 	tenantHttp "github.com/Lovealone1/nex21-api/internal/modules/tenant/transport/http"
@@ -143,6 +147,11 @@ func main() {
 	itemService := payrollservice.NewPayrollItemService(itemRepo, runRepo)
 	itemHandler := payrollhttp.NewPayrollItemHandler(itemService)
 
+	// Initialize Finance Accounts Module
+	accRepo := financerepo.NewAccountRepo(database.DB)
+	accService := financeservice.NewAccountService(accRepo)
+	accHandler := financehttp.NewAccountHandler(accService)
+
 	// Router
 	r := chi.NewRouter()
 
@@ -208,6 +217,8 @@ func main() {
 				runHandler.RegisterRoutes(r)
 				r.Route("/{runId}/items", itemHandler.RegisterRoutes)
 			})
+			// Mount accounts sub-routes
+			r.Route("/{tenantId}/accounts", accHandler.RegisterRoutes)
 		})
 	})
 
