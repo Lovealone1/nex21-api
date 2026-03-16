@@ -13,6 +13,38 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	_ "github.com/Lovealone1/nex21-api/docs" // Must be imported for Swagger init
+	"github.com/Lovealone1/nex21-api/internal/infrastructure/postgres"
+	authInfra "github.com/Lovealone1/nex21-api/internal/modules/auth/infra"
+	contactRepo "github.com/Lovealone1/nex21-api/internal/modules/contacts/repo"
+	contactService "github.com/Lovealone1/nex21-api/internal/modules/contacts/service"
+	contactHttp "github.com/Lovealone1/nex21-api/internal/modules/contacts/transport/http"
+	locationRepo "github.com/Lovealone1/nex21-api/internal/modules/locations/repo"
+	locationService "github.com/Lovealone1/nex21-api/internal/modules/locations/service"
+	locationHttp "github.com/Lovealone1/nex21-api/internal/modules/locations/transport/http"
+	productRepo "github.com/Lovealone1/nex21-api/internal/modules/products/repo"
+	productService "github.com/Lovealone1/nex21-api/internal/modules/products/service"
+	productHttp "github.com/Lovealone1/nex21-api/internal/modules/products/transport/http"
+	profileRepo "github.com/Lovealone1/nex21-api/internal/modules/profiles/repo"
+	profileService "github.com/Lovealone1/nex21-api/internal/modules/profiles/service"
+	profileHttp "github.com/Lovealone1/nex21-api/internal/modules/profiles/transport/http"
+	serviceRepo "github.com/Lovealone1/nex21-api/internal/modules/services/repo"
+	serviceService "github.com/Lovealone1/nex21-api/internal/modules/services/service"
+	serviceHttp "github.com/Lovealone1/nex21-api/internal/modules/services/transport/http"
+	staffrepo "github.com/Lovealone1/nex21-api/internal/modules/staff/repo"
+	staffservice "github.com/Lovealone1/nex21-api/internal/modules/staff/service"
+	staffhttp "github.com/Lovealone1/nex21-api/internal/modules/staff/transport/http"
+
+	payrollrepo "github.com/Lovealone1/nex21-api/internal/modules/payroll/repo"
+	payrollservice "github.com/Lovealone1/nex21-api/internal/modules/payroll/service"
+	payrollhttp "github.com/Lovealone1/nex21-api/internal/modules/payroll/transport/http"
+
+	financerepo "github.com/Lovealone1/nex21-api/internal/modules/finance/repo"
+	financeservice "github.com/Lovealone1/nex21-api/internal/modules/finance/service"
+	financehttp "github.com/Lovealone1/nex21-api/internal/modules/finance/transport/http"
+
+	tenantRepo "github.com/Lovealone1/nex21-api/internal/modules/tenant/repo"
+	tenantService "github.com/Lovealone1/nex21-api/internal/modules/tenant/service"
+	tenantHttp "github.com/Lovealone1/nex21-api/internal/modules/tenant/transport/http"
 	"github.com/Lovealone1/nex21-api/internal/platform/config"
 	"github.com/Lovealone1/nex21-api/internal/platform/db"
 	appMiddleware "github.com/Lovealone1/nex21-api/internal/platform/httpserver/middleware"
@@ -40,9 +72,85 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	// Extract the underlying *sql.DB if we want to defer close, but GORM handles pooling.
-	// sqlDB, _ := database.DB.DB()
-	// defer sqlDB.Close()
+	// Extract the underlying *sql.DB to pass to our custom Tenant Infrastructure
+	sqlDB, err := database.DB.DB()
+	if err != nil {
+		log.Fatalf("Failed to extract sql.DB from gorm: %v", err)
+	}
+
+	// Create the core TenantStore implementing the Repo Contract
+	tenantStore := postgres.NewTenantStore(sqlDB)
+
+	// Open a dedicated simple-protocol connection for admin repo operations.
+	// pgx's default statement cache (QueryExecModeCacheStatement) causes
+	// "prepared statement already exists" (42P05) when the same physical
+	// connection is reused across queries. Simple protocol sends queries as
+	// plain text — no server-side prepared statements, no collisions.
+	adminDB, err := db.ConnectSimple(cfg.DBUrl)
+	if err != nil {
+		log.Fatalf("Failed to open admin (simple-protocol) DB connection: %v", err)
+	}
+
+	// Initialize Identity Provider (Supabase Auth)
+	authProvider := authInfra.NewSupabaseClient(cfg.SupabaseURL, cfg.SupabaseAnonKey, cfg.SupabaseServiceKey)
+
+	// Initialize Profiles Module (Domain Repo + Service + Handler)
+	profRepo := profileRepo.NewProfileRepo(tenantStore, adminDB)
+	profService := profileService.NewProfileService(profRepo, authProvider)
+	profHandler := profileHttp.NewProfileHandler(profService)
+
+	// Initialize Tenant Module (Repo + Service + Handler)
+	tenRepo := tenantRepo.NewTenantRepo(database.DB)
+	tenService := tenantService.NewTenantService(tenRepo)
+	tenHandler := tenantHttp.NewTenantHandler(tenService)
+
+	// Initialize Tenant Members Module
+	memberRepo := tenantRepo.NewMemberRepo(database.DB)
+	memberService := tenantService.NewMemberService(memberRepo)
+	memberHandler := tenantHttp.NewMemberHandler(memberService)
+
+	// Initialize Contacts Module
+	contRepo := contactRepo.NewContactRepo(database.DB)
+	contService := contactService.NewContactService(contRepo)
+	contHandler := contactHttp.NewContactHandler(contService)
+
+	// Initialize Services Module
+	svcRepo := serviceRepo.NewServiceRepo(database.DB)
+	svcService := serviceService.NewServiceService(svcRepo)
+	svcHandler := serviceHttp.NewServiceHandler(svcService)
+
+	// Initialize Products Module
+	prodRepo := productRepo.NewProductRepo(database.DB)
+	prodService := productService.NewProductService(prodRepo)
+	prodHandler := productHttp.NewProductHandler(prodService)
+
+	// Initialize Locations Module
+	locRepo := locationRepo.NewLocationRepo(database.DB)
+	locService := locationService.NewLocationService(locRepo)
+	locHandler := locationHttp.NewLocationHandler(locService)
+
+	// Initialize Staff Module
+	stRepo := staffrepo.NewStaffRepo(database.DB)
+	stService := staffservice.NewStaffService(stRepo)
+	stHandler := staffhttp.NewStaffHandler(stService)
+
+	// Initialize Payroll Module (Run, Item, StaffPay)
+	payRepo := payrollrepo.NewStaffPayRepo(database.DB)
+	payService := payrollservice.NewStaffPayService(payRepo)
+	payHandler := payrollhttp.NewStaffPayHandler(payService)
+
+	runRepo := payrollrepo.NewPayrollRunRepo(database.DB)
+	runService := payrollservice.NewPayrollRunService(runRepo)
+	runHandler := payrollhttp.NewPayrollRunHandler(runService)
+
+	itemRepo := payrollrepo.NewPayrollItemRepo(database.DB)
+	itemService := payrollservice.NewPayrollItemService(itemRepo, runRepo)
+	itemHandler := payrollhttp.NewPayrollItemHandler(itemService)
+
+	// Initialize Finance Accounts Module
+	accRepo := financerepo.NewAccountRepo(database.DB)
+	accService := financeservice.NewAccountService(accRepo)
+	accHandler := financehttp.NewAccountHandler(accService)
 
 	// Router
 	r := chi.NewRouter()
@@ -50,6 +158,7 @@ func main() {
 	// Core middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -72,13 +181,44 @@ func main() {
 		r.Use(appMiddleware.TenantMiddleware(database))
 
 		r.Get("/test-tenant", func(w http.ResponseWriter, r *http.Request) {
-
-			// Si llegó hasta aquí, el middleware ya validó que el User tiene acceso al Tenant
-			// y adjuntó el TenantID seguro al Request Context.
-			tenantID := db.ExtractTenant(r.Context())
+			// El middleware ya validó la membresía e inyectó un Actor. Si no, MustActor hara panic que será atrapado por Recoverer.
+			actor := db.MustActor(r.Context())
 
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + tenantID + `"}`))
+			w.Write([]byte(`{"message": "Acceso concedido al tenant ` + actor.TenantID + ` para el usuario ` + actor.UserID + ` con rol ` + actor.Role + `"}`))
+		})
+
+	})
+
+	// Admin isolated routes — no tenant middleware required.
+	// The caller provides tenant_id in the JSON body, handled inside the service layer.
+	r.Route("/api/admin/v1", func(r chi.Router) {
+		r.Route("/profiles", profHandler.RegisterRoutes)
+		r.Route("/tenants", func(r chi.Router) {
+			// Mount base tenant CRUD
+			tenHandler.RegisterRoutes(r)
+			// Mount membership sub-routes
+			r.Route("/{id}/members", memberHandler.RegisterRoutes)
+			// Mount contact sub-routes
+			r.Route("/{tenantId}/contacts", contHandler.RegisterRoutes)
+			// Mount service sub-routes
+			r.Route("/{tenantId}/services", svcHandler.RegisterRoutes)
+			// Mount product sub-routes
+			r.Route("/{tenantId}/products", prodHandler.RegisterRoutes)
+			// Mount location sub-routes
+			r.Route("/{tenantId}/locations", locHandler.RegisterRoutes)
+			// Mount staff sub-routes
+			r.Route("/{tenantId}/staff", func(r chi.Router) {
+				stHandler.RegisterRoutes(r)
+				r.Route("/{staffId}/pay", payHandler.RegisterRoutes)
+			})
+			// Mount payroll runs & items sub-routes
+			r.Route("/{tenantId}/payroll/runs", func(r chi.Router) {
+				runHandler.RegisterRoutes(r)
+				r.Route("/{runId}/items", itemHandler.RegisterRoutes)
+			})
+			// Mount accounts sub-routes
+			r.Route("/{tenantId}/accounts", accHandler.RegisterRoutes)
 		})
 	})
 

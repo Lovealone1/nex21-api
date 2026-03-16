@@ -1,6 +1,10 @@
 package db
 
 import (
+	"database/sql"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -34,4 +38,26 @@ func Connect(cfg *config.Config) (*Database, error) {
 	observability.Log.Info("Connected to PostgreSQL via GORM successfully")
 
 	return &Database{DB: db}, nil
+}
+
+// ConnectSimple opens a dedicated *sql.DB using pgx with QueryExecModeSimpleProtocol.
+//
+// Simple protocol sends every query as a plain-text message without server-side
+// prepared statements. This prevents the "prepared statement already exists"
+// (SQLSTATE 42P05) conflict that occurs when pgx's default statement cache
+// is used across pooled connections.
+//
+// Use this connection ONLY for admin repository operations that bypass RLS and
+// must not deal with prepared-statement collisions.
+func ConnectSimple(dsn string) (*sql.DB, error) {
+	connCfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Simple protocol: queries are sent as text, no named prepared statements.
+	connCfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
+	db := stdlib.OpenDB(*connCfg)
+	return db, nil
 }

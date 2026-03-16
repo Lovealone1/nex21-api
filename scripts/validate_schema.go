@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Lovealone1/nex21-api/internal/modules/catalog/domain"
 	crmDomain "github.com/Lovealone1/nex21-api/internal/modules/crm/domain"
 	financeDomain "github.com/Lovealone1/nex21-api/internal/modules/finance/domain"
 	iamDomain "github.com/Lovealone1/nex21-api/internal/modules/iam/domain"
-	inventoryDomain "github.com/Lovealone1/nex21-api/internal/modules/inventory/domain"
 	locDomain "github.com/Lovealone1/nex21-api/internal/modules/locations/domain"
 	payrollDomain "github.com/Lovealone1/nex21-api/internal/modules/payroll/domain"
 	purchasingDomain "github.com/Lovealone1/nex21-api/internal/modules/purchasing/domain"
@@ -49,10 +47,6 @@ func main() {
 		// Locations & CRM
 		&locDomain.Location{},
 		&crmDomain.Contact{},
-
-		// Catalog & Inventory
-		&domain.CatalogItem{},
-		&inventoryDomain.InventoryItem{},
 
 		// Scheduling
 		&schedDomain.Staff{},

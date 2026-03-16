@@ -8,8 +8,11 @@ import (
 )
 
 type Config struct {
-	Port  string
-	DBUrl string
+	Port               string
+	DBUrl              string
+	SupabaseURL        string
+	SupabaseAnonKey    string
+	SupabaseServiceKey string
 }
 
 func Load() *Config {
@@ -21,11 +24,17 @@ func Load() *Config {
 	}
 
 	dbUrl := os.Getenv("DATABASE_URL")
+	supaURL := os.Getenv("SUPABASE_URL")
+	supaAnonKey := os.Getenv("SUPABASE_ANON_KEY")
+	supaServiceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 	log.Println("Config loaded")
 
 	return &Config{
-		Port:  port,
-		DBUrl: dbUrl,
+		Port:               port,
+		DBUrl:              dbUrl,
+		SupabaseURL:        supaURL,
+		SupabaseAnonKey:    supaAnonKey,
+		SupabaseServiceKey: supaServiceKey,
 	}
 }
